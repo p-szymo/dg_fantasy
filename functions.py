@@ -12,7 +12,8 @@ def soupify(url):
 
 def event_parser_initial(url):
 
-    _base_url = 'https://www.pdga.com/'
+    # _base_url = 'https://www.pdga.com/'
+
     soup = soupify(url)
     table = soup.select('div[class*="table-container"]')[0]
 
@@ -53,7 +54,7 @@ def events_list(
     events_with_links_raw = soup.select('a[href*="/tour/event/"]')
     # for e in events_with_links_raw:
     #     print(e)
-    events_with_links = [(e.text,e['href']) for e in events_with_links_raw if e.text] #   and '<img' not in e
+    events_with_links = [(e.text,'https://www.pdga.com/'+e['href']) for e in events_with_links_raw if e.text] #   and '<img' not in e
 
     return events_with_links
 
@@ -165,6 +166,54 @@ class Player:
         
     def __repr__(self):
         return self.name
+
+
+class EventSearch:
+
+    def __init__(self, search_name, year, tier=['ES', 'M'], classification=['Pro']):
+
+        self.search_name = search_name.strip()
+        self.year = int(year)
+        
+        self._base_url = 'https://www.pdga.com/tour/search?'
+        self._event_name = self.search_name.replace(' ','%20')
+        self._min_date = f'{self.year}-01-01'
+        self._max_date = f'{self.year}-12-31'
+        self._tier = tier
+        self._classification = classification
+
+        _tier_search = '&'.join([f'Tier[]={t}' for t in self._tier])
+        _classification_search = '&'.join([f'Classification[]={c}' for c in self._classification])
+
+        self.search_url = self._base_url \
+                            + 'OfficialName=' + self._event_name \
+                            + '&date_filter[min][date]=' + self._min_date \
+                            + '&date_filter[max][date]=' + self._max_date \
+                            + '&' + _tier_search \
+                            + '&' + _classification_search
+
+        print(f'Searching here: {self.search_url}')
+
+
+    def search(self):
+        
+        soup = soupify(self.search_url)
+
+        event_details = event_parser_initial(self.search_url)
+        
+        self.event_url = event_details[0]
+        self.event_official_name = event_details[1]
+        self.event_number = event_details[2]
+        
+        return event_details
+
+
+    def getEventName(self):
+        return self.event_official_name
+
+
+    def getEventNumber(self):
+        return self.event_number
 
 
 class Event:
