@@ -2,6 +2,7 @@ import requests
 from bs4 import BeautifulSoup as bs
 import pandas as pd
 import itertools
+import datetime.date as dt
 
 
 def soupify(url):
@@ -163,9 +164,97 @@ class Player:
         self.rating = int(soup.select('td[class*="Rating"]')[0].text.strip())
         
         self.pdga_url = f'https://www.pdga.com/player/{self.pdga_number}'
+
+        self.results = {}
         
     def __repr__(self):
         return self.name
+
+
+def type_check(item, _type):
+    if type(item) != _type:
+        raise TypeError(f'{item} must be type {_type}')
+    else:
+        pass
+
+
+class Search:
+
+    def __init__(self, search_type, search_term, year=dt.today().year, **kwargs):
+
+        self._search_options = {
+            'Event': {
+                'base_url': 'https://www.pdga.com/tour/search',
+                'reqs': [
+                    'event',
+                    'date_filter_min',
+                    'date_filter_max',
+                    'tier',
+                    'classification'
+                ]
+            },
+            'Player': {
+                'base_url': 'https://www.pdga.com/players',
+                'reqs':  [
+                    'first_name',
+                    'last_name'
+                ]
+            }
+        }
+
+        self._search_dict = {
+            'event': {'url': 'OfficialName', 'type': str},
+            'date_filter_min': {'url': 'date_filter[min][date]', 'type': str},
+            'date_filter_max': {'url': 'date_filter[max][date]', 'type': str},
+            'tier': {'url': 'Tier[]', 'type': list},
+            'classification': {'url': 'Classification[]', 'type': list},
+            'first_name': {'url': 'FirstName', 'type': str},
+            'last_name': {'url': 'LastName', 'type': str}
+        }
+
+        self._base_url = self.search_options[search_type.title()][base_url]
+        self._search_reqs = self.search_options[search_type.title()][reqs]
+
+        _reqs_not_met = [x for x in self._search_reqs if x not in kwargs.keys()]
+
+        if _reqs_not_met:
+            if len(_reqs_not_met) == 1:
+                s = ''
+                is_are = 'is'
+            else:
+                s = 's'
+                is_are = 'are'
+
+            print(f"The following argument{s} {is_are} missing: {', '.join(reqs_not_met)}")
+
+        self.input = kwargs
+
+        self.search_string = self._base_url + '?'
+
+        for item in self._search_reqs:
+            item_url_term = self._search_dict[item]['url']
+            item_req_type = self._search_dict[item]['type']
+            item_input = self.input[item]
+
+            type_check(item_url, item_req_type)
+
+            if item_req_type == list:
+                url_part = '&'.join([f'{item_url_term}={x}' for x in item_input])
+
+            elif item_req_type == str:
+                url_part = f'{item_url_term}={item_input}'
+
+            else:
+                print('Something went wrong with _search_reqs')
+
+            self.search_string += url_part
+
+
+        self.result_soup = soupify(self.search_string)
+
+
+
+
 
 
 class EventSearch:
@@ -204,7 +293,7 @@ class EventSearch:
         self.event_url = event_details[0]
         self.event_official_name = event_details[1]
         self.event_number = event_details[2]
-        
+
         return event_details
 
 
