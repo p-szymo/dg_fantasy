@@ -5,6 +5,12 @@ import itertools
 from datetime import date as dt
 
 
+def soupify(url):
+    page = requests.get(url)
+    soup = bs(page.content, "html.parser")
+    return soup
+
+
 def events_list(
         year,
         tier=['ES', 'M'], 
@@ -18,91 +24,11 @@ def events_list(
 
     soup = soupify(url)
     events_with_links_raw = soup.select('a[href*="/tour/event/"]')
-    # for e in events_with_links_raw:
-    #     print(e)
-    events_with_links = [(e.text,'https://www.pdga.com/'+e['href']) for e in events_with_links_raw if e.text] #   and '<img' not in e
+    events_with_links = [
+        (e.text,'https://www.pdga.com/'+e['href']) for e in events_with_links_raw if e.text
+    ]
 
     return events_with_links
-
-
-def total_scorer(results, players, verbose=0):
-    
-    players_dict = {
-        player: {
-            'number_of_events': 0,
-            'total_score': 0,
-            'average_score': 0
-        } for player in players
-    }
-    
-    for event, results_df in results.items():
-        for player in players:
-            if player in results_df.Player.values:
-                score = results_df[results_df.Player == player].Place.values[0]
-                if score == 'DNF':
-                    score = max([x for x in results_df.Place.values if x.isnumeric()]) + 1
-                    in_event = 1
-                    
-                elif score == 'ERROR':
-                    if verbose:
-                        print(f'Something went wrong for {player} in the {event} event.')
-                    in_event = 0
-                    
-                else:
-                    in_event = 1
-                    
-                players_dict[player]['total_score'] += int(score)
-                players_dict[player]['number_of_events'] += in_event
-                players_dict[player][event] = score
-            else:
-                if verbose:
-                    print(f'{player} did not play in the {event}.')
-    
-    for player in players:
-        if players_dict[player]['number_of_events'] != 0:
-            avg_score = players_dict[player]['total_score'] / players_dict[player]['number_of_events']
-            players_dict[player]['average_score'] = round(avg_score, 3)
-        else:
-            players_dict[player]['average_score'] = 0
-            
-    return players_dict
-
-
-def print_output(players_dict):
-    for player, stats in players_dict.items():
-        separator = '*' * (len(player)+6)
-        print(f"""
-{separator}
--- {player} --
-{separator}
-Number of events: {stats['number_of_events']}
-Total score: {stats['total_score']}
-Average score: {stats['average_score']}
-""")
-
-    pass
-
-
-class Player:
-    
-    def __init__(self, name):
-        self.name = name.strip().title()
-        self.first_name = self.name.split(' ')[0]
-        self.last_name = self.name.split(' ')[-1]
-        self._base_url = 'https://www.pdga.com/players'
-        self.search_url = f'{self._base_url}?FirstName={self.first_name}&LastName={self.last_name}'
-        
-        soup = soupify(self.search_url)
-        
-        self.pdga_number = int(soup.select('td[class*="pdga-number"]')[0].text.strip())
-        self.rating = int(soup.select('td[class*="Rating"]')[0].text.strip())
-        
-        self.pdga_url = f'https://www.pdga.com/player/{self.pdga_number}'
-
-        self.results = {}
-        
-    def __repr__(self):
-        return self.name
 
 
 def type_check(item, _type):
@@ -170,9 +96,10 @@ class Search:
         _number_of_reqs = len(self._search_reqs)
 
         for i, item in enumerate(self._search_reqs):
+
+            item_input = self.input[item]
             item_url_term = self._search_dict[item]['url']
             item_req_type = self._search_dict[item]['type']
-            item_input = self.input[item]
 
             type_check(item_input, item_req_type)
 
@@ -190,45 +117,10 @@ class Search:
             if i != _number_of_reqs - 1:
                 self.search_string += '&'
 
-        self._soup = self.soupify(self.search_string)
-
-
-    def soupify(self, url):
-        page = requests.get(url)
-        soup = bs(page.content, "html.parser")
-        return soup
-
-
-
-
+        self._soup = soupify(self.search_string)
 
 
 class EventSearch(Search):
-
-    # def __init__(self, search_name, year, tier=['ES', 'M'], classification=['Pro']):
-
-    #     self.search_name = search_name.strip()
-    #     self.year = int(year)
-        
-    #     self._base_url = 'https://www.pdga.com/tour/search?'
-    #     self._event_name = self.search_name.replace(' ','%20')
-    #     self._min_date = f'{self.year}-01-01'
-    #     self._max_date = f'{self.year}-12-31'
-    #     self._tier = tier
-    #     self._classification = classification
-
-    #     _tier_search = '&'.join([f'Tier[]={t}' for t in self._tier])
-    #     _classification_search = '&'.join([f'Classification[]={c}' for c in self._classification])
-
-    #     self.search_url = self._base_url \
-    #                         + 'OfficialName=' + self._event_name \
-    #                         + '&date_filter[min][date]=' + self._min_date \
-    #                         + '&date_filter[max][date]=' + self._max_date \
-    #                         + '&' + _tier_search \
-    #                         + '&' + _classification_search
-
-    #     print(f'Searching here: {self.search_url}')
-
 
     def __init__(self, search_type, **kwargs):
         Search.__init__(self, search_type, **kwargs)
@@ -271,7 +163,7 @@ class EventSearch(Search):
 
 class Event(EventSearch):
 
-    def __init__(self, name, year, tier=['ES', 'M'], classification=['Pro']):
+    def __init__(self, name, year=dt.today().year, tier=['ES', 'M'], classification=['Pro']):
         
         self.name = name.strip()
         self.year = int(year)
@@ -321,7 +213,7 @@ class Event(EventSearch):
 
     def event_parser(self, url):
         
-        soup = self.soupify(url)
+        soup = soupify(url)
         soup_table = soup.select('div[class*="leaderboard"]')[0]
         results_table_raw = soup_table.select('div[class*="table-container"]')[0]
         odd_rows = results_table_raw.select('tr[class*="odd"]')
@@ -346,5 +238,151 @@ class Event(EventSearch):
 
         setattr(self, 'file_path', file_path)
         setattr(self, 'file_name', file_name)
+
+
+class Player:
+    
+    def __init__(self, name, year=dt.today().year):
+        self.name = name.strip().title()
+        self.first_name = self.name.split(' ')[0]
+        self.last_name = self.name.split(' ')[-1]
+        self._base_url = 'https://www.pdga.com/players'
+        self.search_url = f'{self._base_url}?FirstName={self.first_name}&LastName={self.last_name}'
+        
+        soup = soupify(self.search_url)
+        
+        self.pdga_number = int(soup.select('td[class*="pdga-number"]')[0].text.strip())
+        self.rating = int(soup.select('td[class*="Rating"]')[0].text.strip())
+        
+        self.pdga_url = f'https://www.pdga.com/player/{self.pdga_number}'
+
+        self.total_score = 0
+        self.number_of_events = 0
+        self.average_score = 0
+
+        self.player_results = {
+            year: {}
+        }
+        
+
+    def __repr__(self):
+        return self.name
+
+
+    def fantasy_score(self, event, verbose=0):
+
+        player = self.name
+        results = event.results_df
+        year = event.year
+        event_name = event.name
+
+        max_score = max([x for x in results.Place.values if str(x).isnumeric()])
+
+        if player in results.Player.values:
+
+            score = results[results.Player == player].Place.values[0]
+
+            if score == 'DNF':
+                score = max_score + 1
+                # in_event = 1
+                
+            elif score == 'ERROR':
+                if verbose:
+                    print(f'Something went wrong for {player} in the "{event}" event.')
+                # in_event = 0
+
+                pass
+                
+            # else:
+            #     in_event = 1
+
+            self.player_results[year][event_name] = score
+
+            # if event_name in self.player_results.keys():
+            #     self.total_score -= self.player_results[event_name]
+
+            # else:
+            #     self.number_of_events += in_event
+                
+            # self.total_score += int(score)
+
+            self.total_score = sum(self.player_results[year].values())
+            self.number_of_events = len(self.player_results[year])
+            
+            if self.number_of_events:
+                self.average_score = round(self.total_score / self.number_of_events, 3)
+
+            return score
+
+        else:
+            if verbose:
+                print(f'{player} did not play in the {event}.')
+            pass
+
+
+    def years_results(self, year):
+
+        player = self.name
+
+        results = self.player_results[year]
+        total_score = sum(results.values())
+        number_of_events = len(results)
+        if number_of_events:
+            average_score = round(total_score / number_of_events, 3)
+
+        separator = '*' * (len(player)+6)
+
+        print(f"""{separator}
+-- {player} --
+{separator}
+Number of events: {number_of_events}
+Total score: {total_score}
+Average score: {average_score:.3f}
+"""
+        )
+
+        pass
+
+
+
+
+# def total_scorer(results, players, verbose=0):
+    
+    # players_dict = {
+    #     player: {
+    #         'number_of_events': 0,
+    #         'total_score': 0,
+    #         'average_score': 0
+    #     } for player in players
+    # }
+    
+    # for event, results_df in results.items():
+    #     for player in players:
+    #         if player in results_df.Player.values:
+                
+    
+    # for player in players:
+    #     if players_dict[player]['number_of_events'] != 0:
+    #         avg_score = players_dict[player]['total_score'] / players_dict[player]['number_of_events']
+    #         players_dict[player]['average_score'] = round(avg_score, 3)
+    #     else:
+    #         players_dict[player]['average_score'] = 0
+            
+    # return players_dict
+
+
+def print_output(players_dict):
+    for player, stats in players_dict.items():
+        separator = '*' * (len(player)+6)
+        print(f"""
+{separator}
+-- {player} --
+{separator}
+Number of events: {stats['number_of_events']}
+Total score: {stats['total_score']}
+Average score: {stats['average_score']}
+""")
+
+    pass
 
     
