@@ -371,18 +371,48 @@ Average score: {average_score:.3f}
     # return players_dict
 
 
-def print_output(players_dict):
-    for player, stats in players_dict.items():
-        separator = '*' * (len(player)+6)
-        print(f"""
-{separator}
--- {player} --
-{separator}
-Number of events: {stats['number_of_events']}
-Total score: {stats['total_score']}
-Average score: {stats['average_score']}
-""")
+# def print_output(players_dict):
+#     for player, stats in players_dict.items():
+#         separator = '*' * (len(player)+6)
+#         print(f"""
+# {separator}
+# -- {player} --
+# {separator}
+# Number of events: {stats['number_of_events']}
+# Total score: {stats['total_score']}
+# Average score: {stats['average_score']}
+# """)
 
-    pass
+#     pass
 
     
+class Team:
+    
+    def __init__(self, owner, name, year=dt.today().year):
+
+        self.owner = owner.strip().title()
+        self.name = name.strip().title()
+        # self.first_name = self.name.split(' ')[0]
+        # self.last_name = self.name.split(' ')[-1]
+        # self._base_url = 'https://www.pdga.com/players'
+        # self.search_url = f'{self._base_url}?FirstName={self.first_name}&LastName={self.last_name}'
+        
+        # soup = soupify(self.search_url)
+        
+        # self.pdga_number = int(soup.select('td[class*="pdga-number"]')[0].text.strip())
+        # self.rating = int(soup.select('td[class*="Rating"]')[0].text.strip())
+        
+        # self.pdga_url = f'https://www.pdga.com/player/{self.pdga_number}'
+
+        # self.total_score = 0
+        # self.number_of_events = 0
+        # self.average_score = 0
+
+        # self.player_results = {
+        #     year: {}
+        # }
+        
+
+    def __repr__(self):
+        return f'{self.name}, owned by {self.owner}'
+
