@@ -242,7 +242,7 @@ class Event(EventSearch):
 
 class Player:
     
-    def __init__(self, name, year=dt.today().year):
+    def __init__(self, name, is_active=False, year=dt.today().year):
         self.name = name.strip().title()
         self.first_name = self.name.split(' ')[0]
         self.last_name = self.name.split(' ')[-1]
@@ -263,6 +263,8 @@ class Player:
         self.player_results = {
             year: {}
         }
+
+        self.is_active = is_active
         
 
     def __repr__(self):
@@ -344,6 +346,21 @@ Average score: {average_score:.3f}
         pass
 
 
+    def update_status(self, activate=True):
+
+        action_dict = {
+            True: 'active',
+            False: 'inactive'
+        }
+
+        if self.is_active == activate:
+            print(f'{player} is already {action_dict[activate]}')
+        else:
+            player.is_active = activate
+
+        return None
+
+
 
 
 # def total_scorer(results, players, verbose=0):
@@ -388,10 +405,15 @@ Average score: {average_score:.3f}
     
 class Team:
     
-    def __init__(self, owner, name, year=dt.today().year):
+    def __init__(self, owner, name, roster=[], total_limit=8, active_limit=5, year=dt.today().year):
 
         self.owner = owner.strip().title()
         self.name = name.strip().title()
+        self._limit = limit
+        self.roster = roster
+        self.total_number_of_players = len(self.roster)
+        self.active_players = [player for player in self.roster if player.is_active]
+        self.number_of_active_players = len(self.roster)
         # self.first_name = self.name.split(' ')[0]
         # self.last_name = self.name.split(' ')[-1]
         # self._base_url = 'https://www.pdga.com/players'
@@ -415,4 +437,49 @@ class Team:
 
     def __repr__(self):
         return f'{self.name}, owned by {self.owner}'
+        
+
+    def add_player(self, player):
+
+        if player not in self.roster:
+            if len(self.roster) < limit:
+                self.roster.append(player)
+                self.number_of_players = len(self.roster)
+                print(f'{player} has been added to {self.name}')
+            else:
+                print(f'{self.name} must drop a player before adding another')
+        else:
+            print(f'{player} is already a member of {self.name}')
+
+        return None
+        
+
+    def drop_player(self, player):
+
+        if player in self.roster:
+            self.roster.remove(player)
+            self.number_of_players = len(self.roster)
+            print(f'{player} has been dropped from {self.name}')
+        else:
+            print(f'{player} is not a member of {self.name}')
+
+        return None
+        
+
+    def update_player(self, player, action):
+
+        if player not in self.roster:
+            print(f'{player} is not a member of {self.name}')
+            return None
+
+        action_dict = {
+            'activate': True,
+            'deactivate': False
+        }
+
+        player.update_status(action_dict[action])
+
+        return None
+
+
 
