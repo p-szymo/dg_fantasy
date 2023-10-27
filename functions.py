@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup as bs
 import pandas as pd
 import itertools
 from datetime import date as dt
+import re
 
 
 def soupify(url):
@@ -25,10 +26,25 @@ def events_list(
     soup = soupify(url)
     events_with_links_raw = soup.select('a[href*="/tour/event/"]')
     events_with_links = [
-        (e.text,'https://www.pdga.com/'+e['href']) for e in events_with_links_raw if e.text
+        (e.text,'https://www.pdga.com'+e['href']) for e in events_with_links_raw if e.text
     ]
 
     return events_with_links
+
+
+def players_links_list(
+        base_url='https://www.pdga.com/united-states-tour-ranking-open',
+    ):
+    
+    soup = soupify('https://www.pdga.com/united-states-tour-ranking-open')
+    table = soup.select('div[class*="table"]')[0]
+    player_data = table.select('a[class*="player-profile-link"]')
+    # player_data = table.select('a[href*="/player/"]')
+    players_links = [
+        ('https://www.pdga.com'+p['href']) for p in player_data if p.text.strip()
+    ]
+
+    return players_links
 
 
 def type_check(item, _type):
@@ -120,21 +136,7 @@ class Search:
         self._soup = soupify(self.search_string)
 
 
-class EventSearch(Search):
-
-    def __init__(self, search_type, **kwargs):
-        Search.__init__(self, search_type, **kwargs)
-
-        self._event_details = self.parser()
-        
-        self.event_url = self._event_details[0]
-        self.event_official_name = self._event_details[1]
-        self.event_number = self._event_details[2]
-
-
-    def parser(self):
-
-        _base_url = 'https://www.pdga.com'
+    def parser_init(self):
 
         soup = self._soup
         table = soup.select('div[class*="table-container"]')[0]
@@ -144,6 +146,25 @@ class EventSearch(Search):
 
         rows = [x for x in itertools.chain.from_iterable(itertools.zip_longest(odd_rows,even_rows)) if x]
         
+        return rows
+
+
+class EventSearch(Search):
+
+    def __init__(self, **kwargs):
+        Search.__init__(self, search_type='Event', **kwargs)
+
+        self._event_details = self.parser()
+        
+        self.url = self._event_details[0]
+        self.official_name = self._event_details[1]
+        self.pdga_event_number = self._event_details[2]
+
+
+    def parser(self, _base_url = 'https://www.pdga.com'):
+
+        rows = self.parser_init()
+
         parsings = []
         for row in rows:
             if row.select('td[class*="views-field views-field-Classification"]')[0].text.strip() == 'Pro':
@@ -161,28 +182,67 @@ class EventSearch(Search):
         return event[0], event[1], event[2]
 
 
+class PlayerSearch(Search):
+
+    def __init__(self, **kwargs):
+        Search.__init__(self, search_type='Player', **kwargs)
+
+        self._player_details = self.parser()
+        
+        self.url = self._player_details[0]
+        self.official_name = self._player_details[1]
+        self.pdga_number = self._player_details[2]
+
+
+    def parser(self, _base_url = 'https://www.pdga.com'):
+
+        rows = self.parser_init()
+
+        parsings = []
+        for row in rows:
+            player_link = row.select('a[href*="player/"]')[0]
+            player_url = _base_url + player_link['href']
+            player_official_name = player_link.text
+            player_number = int(player_url.split('/')[-1])
+            parsings.append((player_url, player_official_name, player_number))
+                
+        if len(parsings) > 1:
+            print('There may be an issue as we parsed more than one item that matches.')
+
+        player = parsings[0]
+
+        return player[0], player[1], player[2]
+
+
 class Event(EventSearch):
 
-    def __init__(self, name, year=dt.today().year, tier=['ES', 'M'], classification=['Pro']):
-        
-        self.name = name.strip()
+    def __init__(self, name, url=None, year=dt.today().year, tier=['ES', 'M'], classification=['Pro']):
+
         self.year = int(year)
-        
-        self._event_name = self.name.replace(' ','%20')
-        self._min_date = f'{self.year}-01-01'
-        self._max_date = f'{self.year}-12-31'
-        self._tier = tier
-        self._classification = classification
 
-        self._search_params = {
-            'event': self._event_name,
-            'date_filter_min': self._min_date ,
-            'date_filter_max': self._max_date,
-            'tier': self._tier,
-            'classification': self._classification
-        }
+        if not url:
+            self.name = name.strip()
+            
+            self._event_name = self.name.replace(' ','%20')
+            self._min_date = f'{self.year}-01-01'
+            self._max_date = f'{self.year}-12-31'
+            self._tier = tier
+            self._classification = classification
 
-        EventSearch.__init__(self, search_type='Event', **self._search_params)
+            self._search_params = {
+                'event': self._event_name,
+                'date_filter_min': self._min_date ,
+                'date_filter_max': self._max_date,
+                'tier': self._tier,
+                'classification': self._classification
+            }
+
+            EventSearch.__init__(self, **self._search_params)
+
+        else:
+            self.url = url
+            self.official_name = name
+            self.pdga_event_number = self.event_url.split('/')[-1]
 
         print(self.event_url)
 
@@ -227,7 +287,7 @@ class Event(EventSearch):
 
     def save_event_results(self, file_path=''):
 
-        file_name = f'Results_{self.event_official_name.replace(" ","-")}.csv'
+        file_name = f'Results_{self.official_name.replace(" ","-")}.csv'
 
         if len(self.results_df) == 0:
             print(f'Results for "{self}" do not exist.')
@@ -240,21 +300,46 @@ class Event(EventSearch):
         setattr(self, 'file_name', file_name)
 
 
-class Player:
+class Player(PlayerSearch):
     
-    def __init__(self, name, is_active=False, year=dt.today().year):
-        self.name = name.strip().title()
-        self.first_name = self.name.split(' ')[0]
-        self.last_name = self.name.split(' ')[-1]
-        self._base_url = 'https://www.pdga.com/players'
-        self.search_url = f'{self._base_url}?FirstName={self.first_name}&LastName={self.last_name}'
+    def __init__(self, search_name=None, url=None, is_active=False, year=dt.today().year):
+
+        if search_name:
+            self._search_name = search_name.strip().title()
+            self._search_first_name = self._search_name.split(' ')[0]
+            self._search_last_name = self._search_name.split(' ')[-1]
+
+
+        if not url:
+            self._base_url = 'https://www.pdga.com/players'
+            self.search_url = f'{self._base_url}?FirstName={self._search_first_name}&LastName={self._search_last_name}'
         
-        soup = soupify(self.search_url)
-        
-        self.pdga_number = int(soup.select('td[class*="pdga-number"]')[0].text.strip())
-        self.rating = int(soup.select('td[class*="Rating"]')[0].text.strip())
-        
-        self.pdga_url = f'https://www.pdga.com/player/{self.pdga_number}'
+            _soup = soupify(self.search_url)
+            
+            self.pdga_number = int(_soup.select('td[class*="pdga-number"]')[0].text.strip())
+            
+            self.url = f'https://www.pdga.com/player/{self.pdga_number}'
+
+        else:
+            self._base_url = None
+            self.search_url = None
+            self._search_first_name = None
+            self._search_last_name = None
+            self.url = url
+            self.pdga_number = int(self.url.split('/')[-1])
+
+            
+        _soup = soupify(self.url)
+
+        try:
+            _name_raw = soup.select('div[class*="pane-page-title"]')[0].text.strip()
+        except:
+            _name_raw = re.findall('<h1>(.+) #\d{1,7}<\/h1>', str(_soup))[0]
+        self.official_name = _name_raw.split('#')[0].strip()
+        self.first_name = self.official_name.split(' ')[0]
+        self.last_name = self.official_name.split(' ')[-1]
+        rating_raw = _soup.select('li[class*="rating"]')[0].text.strip()
+        self.rating = int(re.findall(' (\d{3,4}) ', rating_raw)[0])
 
         self.total_score = 0
         self.number_of_events = 0
@@ -268,15 +353,15 @@ class Player:
         
 
     def __repr__(self):
-        return self.name
+        return self.official_name
 
 
     def fantasy_score(self, event, verbose=0):
 
-        player = self.name
+        player = self.official_name
         results = event.results_df
         year = event.year
-        event_name = event.name
+        event_name = event.event_official_name
 
         max_score = max([x for x in results.Place.values if str(x).isnumeric()])
 
@@ -409,11 +494,11 @@ class Team:
 
         self.owner = owner.strip().title()
         self.name = name.strip().title()
-        self._limit = limit
+        self._limit = total_limit
         self.roster = roster
         self.total_number_of_players = len(self.roster)
         self.active_players = [player for player in self.roster if player.is_active]
-        self.number_of_active_players = len(self.roster)
+        self.number_of_active_players = self.count_active_players()
         # self.first_name = self.name.split(' ')[0]
         # self.last_name = self.name.split(' ')[-1]
         # self._base_url = 'https://www.pdga.com/players'
@@ -439,10 +524,24 @@ class Team:
         return f'{self.name}, owned by {self.owner}'
         
 
+    def count_active_players(self):
+
+        _number_of_active_players = len([player for player in self.roster if player.is_active])
+
+        return _number_of_active_players
+        
+
+    def count_active_players(self):
+
+        _number_of_active_players = len([player for player in self.roster if player.is_active])
+
+        return _number_of_active_players
+        
+
     def add_player(self, player):
 
         if player not in self.roster:
-            if len(self.roster) < limit:
+            if len(self.roster) < self._limit:
                 self.roster.append(player)
                 self.number_of_players = len(self.roster)
                 print(f'{player} has been added to {self.name}')
@@ -478,6 +577,9 @@ class Team:
         }
 
         player.update_status(action_dict[action])
+        self.number_of_active_players = self.count_active_players()
+
+
 
         return None
 
