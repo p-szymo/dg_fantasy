@@ -216,21 +216,19 @@ class PlayerSearch(Search):
 
 class Event(EventSearch):
 
-    def __init__(self, name, url=None, year=dt.today().year, tier=['ES', 'M'], classification=['Pro']):
+    def __init__(self, name=None, url=None, year=dt.today().year, tier=['ES', 'M'], classification=['Pro']):
 
         self.year = int(year)
 
         if not url:
-            self.name = name.strip()
-            
-            self._event_name = self.name.replace(' ','%20')
+            self._search_name = name.strip().replace(' ','%20')
             self._min_date = f'{self.year}-01-01'
             self._max_date = f'{self.year}-12-31'
             self._tier = tier
             self._classification = classification
 
             self._search_params = {
-                'event': self._event_name,
+                'event': self._search_name,
                 'date_filter_min': self._min_date ,
                 'date_filter_max': self._max_date,
                 'tier': self._tier,
@@ -242,16 +240,16 @@ class Event(EventSearch):
         else:
             self.url = url
             self.official_name = name
-            self.pdga_event_number = self.event_url.split('/')[-1]
+            self.pdga_event_number = self.url.split('/')[-1]
 
-        print(self.event_url)
+        print(self.url)
 
-        self.results_df = self.event_parser(self.event_url)
+        self.results_df = self.event_parser(self.url)
 
 
 
     def __repr__(self):
-        return self.event_official_name
+        return self.official_name
 
 
     def row_parser(self, row):
@@ -361,7 +359,7 @@ class Player(PlayerSearch):
         player = self.official_name
         results = event.results_df
         year = event.year
-        event_name = event.event_official_name
+        event_name = event.official_name
 
         max_score = max([x for x in results.Place.values if str(x).isnumeric()])
 
@@ -407,28 +405,33 @@ class Player(PlayerSearch):
             pass
 
 
-    def years_results(self, year):
+    def years_results(self, year, i=0):
 
-        player = self.name
+        player = self.official_name
 
         results = self.player_results[year]
         total_score = sum(results.values())
         number_of_events = len(results)
         if number_of_events:
             average_score = round(total_score / number_of_events, 3)
+        else:
+            average_score = 0
 
-        separator = '*' * (len(player)+6)
+        if i:
+            player_line = f'{i}. {player}'
+        else:
+            player_line = f'-- {player} --'
 
-        print(f"""{separator}
--- {player} --
+        separator = '*' * (len(player_line)+2)
+
+        return f"""{separator}
+ {player_line}
 {separator}
-Number of events: {number_of_events}
-Total score: {total_score}
-Average score: {average_score:.3f}
-"""
-        )
-
-        pass
+Number of events: {self.number_of_events}
+Total score: {self.total_score}
+Average score: {self.average_score:.3f}
+Weighted average: {round(self.total_score / (self.number_of_events * 0.5), 3):.3f}
+"""     
 
 
     def update_status(self, activate=True):
