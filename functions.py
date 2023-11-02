@@ -448,48 +448,6 @@ Weighted average: {round(self.total_score / (self.number_of_events * 0.5), 3):.3
 
         return None
 
-
-
-
-# def total_scorer(results, players, verbose=0):
-    
-    # players_dict = {
-    #     player: {
-    #         'number_of_events': 0,
-    #         'total_score': 0,
-    #         'average_score': 0
-    #     } for player in players
-    # }
-    
-    # for event, results_df in results.items():
-    #     for player in players:
-    #         if player in results_df.Player.values:
-                
-    
-    # for player in players:
-    #     if players_dict[player]['number_of_events'] != 0:
-    #         avg_score = players_dict[player]['total_score'] / players_dict[player]['number_of_events']
-    #         players_dict[player]['average_score'] = round(avg_score, 3)
-    #     else:
-    #         players_dict[player]['average_score'] = 0
-            
-    # return players_dict
-
-
-# def print_output(players_dict):
-#     for player, stats in players_dict.items():
-#         separator = '*' * (len(player)+6)
-#         print(f"""
-# {separator}
-# -- {player} --
-# {separator}
-# Number of events: {stats['number_of_events']}
-# Total score: {stats['total_score']}
-# Average score: {stats['average_score']}
-# """)
-
-#     pass
-
     
 class Team:
     
@@ -498,10 +456,12 @@ class Team:
         self.owner = owner.strip().title()
         self.name = name.strip().title()
         self._limit = total_limit
+        self._active_limit = active_limit
         self.roster = roster
         self.total_number_of_players = len(self.roster)
         self.active_players = [player for player in self.roster if player.is_active]
         self.number_of_active_players = self.count_active_players()
+        self.active_spots_remaining = self._active_limit - self.number_of_active_players
         # self.first_name = self.name.split(' ')[0]
         # self.last_name = self.name.split(' ')[-1]
         # self._base_url = 'https://www.pdga.com/players'
@@ -547,11 +507,23 @@ class Team:
             if len(self.roster) < self._limit:
                 self.roster.append(player)
                 self.number_of_players = len(self.roster)
-                print(f'{player} has been added to {self.name}')
+                _message = f'{player} has been added to {self.name}'
+
+                if len(self.roster) <= self._active_limit:
+                    player.is_active = True
+                    self.active_players.append(player)
+                    self.number_of_active_players = self.count_active_players()
+                    _message += ' and set to active'
+
+                else:
+                    pass
+
             else:
-                print(f'{self.name} must drop a player before adding another')
+                _message = f'{self.name} must drop a player before adding another'
         else:
-            print(f'{player} is already a member of {self.name}')
+            _message = print(f'{player} is already a member of {self.name}')
+
+        print(_message + '.')
 
         return None
         
@@ -582,7 +554,35 @@ class Team:
         player.update_status(action_dict[action])
         self.number_of_active_players = self.count_active_players()
 
+        return None
 
+
+    def team_results(self):
+
+        _total_score = 0
+        _number_of_events = 0
+
+        if self.roster:
+            for player in self.roster:
+                _total_score += player.total_score
+                _number_of_events += player.number_of_events
+
+            if _number_of_events:
+                _average_score = _total_score / _number_of_events
+
+                _message = f"""Number of events: {_number_of_events}
+Total score: {_total_score}
+Average score: {_average_score:.3f}
+Weighted average: {round(_total_score / (_number_of_events * 0.5), 3):.3f}
+"""     
+
+            else:
+                _message = f'The players on {self.name} have not played in any events.'
+
+        else:
+            _message = f'{self.name} has no players.'
+
+        print(_message)
 
         return None
 
