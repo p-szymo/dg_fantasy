@@ -497,6 +497,57 @@ class Team:
     def __repr__(self):
         return f'{self.name}, owned by {self.owner}'
 
+    def __add__(self, player):
+
+        if type(player) == Player:
+
+            if player not in self.roster:
+
+                if len(self.roster) < self._limit:
+
+                    self.roster += [player]
+                    _message = f'{player} has been added to {self.name}'
+
+                    if self.player_count <= self._active_limit:
+                        player.is_active = True
+                        _message += ' and set to active'
+
+                    else:
+                        player.is_active = False
+
+                else:
+                    _message = f'{self.name} must drop a player before adding another'
+
+            else:
+                _message = print(f'{player} is already a member of {self.name}')
+
+            print(_message + '.')
+
+            return None
+
+        else:
+            raise TypeError
+        
+
+    def __sub__(self, player):
+
+        if type(player) == Player:
+
+            if player in self.roster:
+
+                player.is_active = False
+                self.roster.remove(player)
+                
+                print(f'{player} has been dropped from {self.name}')
+
+            else:
+                print(f'{player} is not a member of {self.name}')
+
+            return None
+
+        else:
+            raise TypeError
+
     @property
     def roster(self):
         return self._roster
@@ -521,45 +572,6 @@ class Team:
         _number_of_active_players = len([player for player in self.roster if player.is_active])
 
         return _number_of_active_players
-        
-
-    def add_player(self, player):
-
-        if player not in self.roster:
-            if len(self.roster) < self._limit:
-                self.roster.append(player)
-                # self.number_of_players = len(self.roster)
-                _message = f'{player} has been added to {self.name}'
-
-                if self.player_count <= self._active_limit:
-                    player.is_active = True
-                    # self.active_players.append(player)
-                    # self.number_of_active_players = self.count_active_players()
-                    _message += ' and set to active'
-
-                else:
-                    pass
-
-            else:
-                _message = f'{self.name} must drop a player before adding another'
-        else:
-            _message = print(f'{player} is already a member of {self.name}')
-
-        print(_message + '.')
-
-        return None
-        
-
-    def drop_player(self, player):
-
-        if player in self.roster:
-            self.roster.remove(player)
-            # self.number_of_players = len(self.roster)
-            print(f'{player} has been dropped from {self.name}')
-        else:
-            print(f'{player} is not a member of {self.name}')
-
-        return None
         
 
     def update_player(self, player, action):
