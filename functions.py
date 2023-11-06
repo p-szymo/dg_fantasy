@@ -448,6 +448,38 @@ Weighted average: {round(self.total_score / (self.number_of_events * 0.5), 3):.3
 
         return None
 
+# class SomeClass(object):
+#     def __init__(self, n):
+#         self.list = range(0, n)
+
+#     @property
+#     def list(self):
+#         return self._list
+#     @list.setter
+#     def list(self, val):
+#         self._list = val
+#         self._listsquare = [x**2 for x in self._list ]
+
+#     @property
+#     def listsquare(self):
+#         return self._listsquare
+#     @listsquare.setter
+#     def listsquare(self, val):
+#         self.list = [int(pow(x, 0.5)) for x in val]
+
+# >>> c = SomeClass(5)
+# >>> c.listsquare
+# [0, 1, 4, 9, 16]
+# >>> c.list
+# [0, 1, 2, 3, 4]
+# >>> c.list = range(0,6)
+# >>> c.list
+# [0, 1, 2, 3, 4, 5]
+# >>> c.listsquare
+# [0, 1, 4, 9, 16, 25]
+# >>> c.listsquare = [x**2 for x in range(0,10)]
+# >>> c.list
+# [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
     
 class Team:
     
@@ -458,38 +490,28 @@ class Team:
         self._limit = total_limit
         self._active_limit = active_limit
         self.roster = roster
-        self.total_number_of_players = len(self.roster)
-        self.active_players = [player for player in self.roster if player.is_active]
-        self.number_of_active_players = self.count_active_players()
-        self.active_spots_remaining = self._active_limit - self.number_of_active_players
-        # self.first_name = self.name.split(' ')[0]
-        # self.last_name = self.name.split(' ')[-1]
-        # self._base_url = 'https://www.pdga.com/players'
-        # self.search_url = f'{self._base_url}?FirstName={self.first_name}&LastName={self.last_name}'
-        
-        # soup = soupify(self.search_url)
-        
-        # self.pdga_number = int(soup.select('td[class*="pdga-number"]')[0].text.strip())
-        # self.rating = int(soup.select('td[class*="Rating"]')[0].text.strip())
-        
-        # self.pdga_url = f'https://www.pdga.com/player/{self.pdga_number}'
-
-        # self.total_score = 0
-        # self.number_of_events = 0
-        # self.average_score = 0
-
-        # self.player_results = {
-        #     year: {}
-        # }
-        
+        self.player_count = len(self.roster)
+        # self.active_player_count = self.count_active_players()
+        # self.active_spots_remaining = self._active_limit - self.number_of_active_players
 
     def __repr__(self):
         return f'{self.name}, owned by {self.owner}'
+
+    @property
+    def roster(self):
+        return self._roster
+    @roster.setter
+    def roster(self, val):
+        self._roster = val
+        self.player_count = len(self._roster)
+        self.active_roster = [player for player in self._roster if player.is_active]
+        self.active_player_count = len(self.active_roster)
+        self.active_spots_remaining = self._active_limit - self.active_player_count
         
 
     def count_active_players(self):
 
-        _number_of_active_players = len([player for player in self.roster if player.is_active])
+        _number_of_active_players = len(self.active_roster)
 
         return _number_of_active_players
         
@@ -506,13 +528,13 @@ class Team:
         if player not in self.roster:
             if len(self.roster) < self._limit:
                 self.roster.append(player)
-                self.number_of_players = len(self.roster)
+                # self.number_of_players = len(self.roster)
                 _message = f'{player} has been added to {self.name}'
 
-                if len(self.roster) <= self._active_limit:
+                if self.player_count <= self._active_limit:
                     player.is_active = True
-                    self.active_players.append(player)
-                    self.number_of_active_players = self.count_active_players()
+                    # self.active_players.append(player)
+                    # self.number_of_active_players = self.count_active_players()
                     _message += ' and set to active'
 
                 else:
@@ -532,7 +554,7 @@ class Team:
 
         if player in self.roster:
             self.roster.remove(player)
-            self.number_of_players = len(self.roster)
+            # self.number_of_players = len(self.roster)
             print(f'{player} has been dropped from {self.name}')
         else:
             print(f'{player} is not a member of {self.name}')
@@ -552,18 +574,24 @@ class Team:
         }
 
         player.update_status(action_dict[action])
-        self.number_of_active_players = self.count_active_players()
+        # self.number_of_active_players = self.count_active_players()
 
         return None
 
 
-    def team_results(self):
+    def team_results(self, active_only=False):
 
         _total_score = 0
         _number_of_events = 0
 
         if self.roster:
-            for player in self.roster:
+            if active_only:
+                _roster = self.active_roster
+
+            else:
+                _roster = self.roster
+
+            for player in _roster:
                 _total_score += player.total_score
                 _number_of_events += player.number_of_events
 
