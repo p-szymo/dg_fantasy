@@ -486,7 +486,7 @@ Weighted average: {round(self.total_score / (self.number_of_events * 0.5), 3):.3
     
 class Team:
     
-    def __init__(self, owner, name, roster=[], total_limit=8, active_limit=5, year=dt.today().year):
+    def __init__(self, owner, name, available_players, roster=[], total_limit=8, active_limit=5, year=dt.today().year):
 
         self.owner = owner.strip().title()
         self.name = name.strip().title()
@@ -504,25 +504,30 @@ class Team:
 
         if type(player) in [Player, str]:
 
-            if player not in self.roster:
+            if player in available_players:
 
-                if len(self.roster) < self._limit:
+                if player not in self.roster:
 
-                    self.roster += [player]
-                    _message = f'{player} has been added to {self.name}'
+                    if len(self.roster) < self._limit:
 
-                    if self.player_count <= self._active_limit:
-                        player.is_active = True
-                        _message += ' and set to active'
+                        self.roster += [player]
+                        _message = f'{player} has been added to {self.name}'
+
+                        if self.player_count <= self._active_limit:
+                            player.is_active = True
+                            _message += ' and set to active'
+
+                        else:
+                            player.is_active = False
 
                     else:
-                        player.is_active = False
+                        _message = f'{self.name} must drop a player before adding another'
 
                 else:
-                    _message = f'{self.name} must drop a player before adding another'
+                    _message = print(f'{player} is already a member of {self.name}')
 
             else:
-                _message = print(f'{player} is already a member of {self.name}')
+                _message = print(f'{player} is not available')
 
             print(_message + '.')
 
@@ -633,6 +638,21 @@ Weighted average: {round(_total_score / (_number_of_events * 0.5), 3):.3f}
         print(_message)
 
         return None
+
+
+class League:
+    def __init__(self, name, teams, available_players, unavailable_players=[], team_total_limit=8, team_active_limit=5, year=dt.today().year):
+
+        self.name = name.strip()
+        self.teams = teams
+        self.team_names = [team.name for team in self.teams]
+        self.team_owners = [team.owner for team in self.teams]
+        self.team_rosters = [team.roster for team in self.teams]
+        self._team_total_limit = total_limit
+        self._team_active_limit = active_limit
+
+    def __repr__(self):
+        return self.name
 
 
 
