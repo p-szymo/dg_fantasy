@@ -353,6 +353,9 @@ class Player(PlayerSearch):
     def __repr__(self):
         return self.official_name
 
+    def __eq__(self, val):
+        return self.official_name == val
+
 
     def fantasy_score(self, event, verbose=0):
 
@@ -497,9 +500,9 @@ class Team:
     def __repr__(self):
         return f'{self.name}, owned by {self.owner}'
 
-    def __add__(self, player):
+    def __iadd__(self, player):
 
-        if type(player) == Player:
+        if type(player) in [Player, str]:
 
             if player not in self.roster:
 
@@ -523,30 +526,35 @@ class Team:
 
             print(_message + '.')
 
-            return None
+            return self
 
         else:
-            raise TypeError
+            raise TypeError(f"must be Player or str, not {_type}")
         
 
-    def __sub__(self, player):
+    def __isub__(self, player):
 
-        if type(player) == Player:
+        _type = type(player)
+
+        if _type in [Player, str]:
 
             if player in self.roster:
 
-                player.is_active = False
-                self.roster.remove(player)
-                
+                _index = self.roster.index(player)
+
+                self.roster[_index].is_active = False
+
+                del self.roster[_index]
+
                 print(f'{player} has been dropped from {self.name}')
 
             else:
                 print(f'{player} is not a member of {self.name}')
 
-            return None
+            return self
 
         else:
-            raise TypeError
+            raise TypeError(f"must be Player or str, not {_type}")
 
     @property
     def roster(self):
