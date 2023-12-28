@@ -4,6 +4,7 @@ import pandas as pd
 import itertools
 from datetime import date as dt
 import re
+import pickle
 
 
 def soupify(url):
@@ -53,6 +54,67 @@ def type_check(item, _type):
     else:
         pass
 
+
+def table_exists(table_name):
+
+    table_exists_query = f"""SELECT 1
+FROM information_schema.tables
+WHERE table_name='{table_name}'"""
+
+    return table_exists_query
+
+
+def create_table(table_name, table_columns):
+
+    columns_list = [f"{column} {datatype}" for column,datatype in table_columns.items()]
+    columns_query = ',\n\t'.join(columns_list)
+
+    create_table_query = f'''CREATE TABLE "{table_name}" (
+    {columns_query}
+);'''
+
+    return create_table_query
+
+
+def player_table_dict():
+
+    return {
+        "Name": "varchar(200)",
+        "PDGA Number": "bigint",
+        "Event Name": "varchar(500)",
+        "Place": "int",
+        "Event Year": "int",
+        "Event Status": "varchar(50)"
+    }
+
+
+def insert_data(table_name, table_columns, data):
+
+    column_names = table_columns.keys()
+
+    insert_list = []
+
+    for i,_dict in enumerate(data):
+
+        data_to_insert = []
+
+        for i,(column_name,datum) in _dict.items():
+            if "varchar" in table_columns[column_name]:
+                datum = "'" + datum.replace("'", "''") + "'"
+
+            data_to_insert.append(datum)
+
+        insert_list.append('(' + ','.join(data_to_insert) + ')')
+
+    insert_values = '\n\t,'.join(insert_list) + '\n;'
+
+    insert_query = f'''TRUNCATE TABLE "{table_name}";
+
+INSERT INTO "{table_name}" ({",".join(column_names)})
+VALUES {insert_values}'''
+
+    return insert_query
+    
 
 class Search:
 
@@ -242,9 +304,19 @@ class Event(EventSearch):
             self.official_name = name
             self.pdga_event_number = self.url.split('/')[-1]
 
-        print(self.url)
+        # print(self.url)
+
+        self.table_name = self.event_namer()
 
         self.results_df = self.event_parser(self.url)
+
+        _exists, _create, _insert = self.sql_queries()
+
+        self.table_exists_query = _exists
+
+        self.create_table_query = _create
+
+        self.insert_values_query = _insert
 
 
 
@@ -296,6 +368,99 @@ class Event(EventSearch):
 
         setattr(self, 'file_path', file_path)
         setattr(self, 'file_name', file_name)
+
+        return None
+
+
+    def event_namer(self):
+        _name = self.official_name.upper().split(' - ')[-1]
+        if 'PRESENT' in _name:
+            if 'PRESENTED' in _name:
+                event_name = _name.split('PRESENTED')[0].strip()
+            elif 'PRESENTS' in _name:
+                event_name = _name.split('PRESENTS')[-1].strip()
+                
+        elif 'POWERED' in _name:
+            event_name = _name.split('POWERED')[0].strip()
+                
+        else:
+            event_name = _name.strip()
+            
+        event_name = event_name.replace(str(self.year), '').replace('PLAY IT AGAIN SPORTS', '').replace('  ', ' ').strip()
+            
+        return f"{event_name}, {self.year}"
+
+
+    def sql_queries(self):
+
+        table_exists_query = f"""SELECT 1
+FROM information_schema.tables
+WHERE table_name='{self.table_name}'"""
+
+        create_table_query = f'''CREATE TABLE "{self.table_name}" (
+     "Place" int
+    ,"Player" varchar(100)
+    ,"PDGA Number" bigint
+    ,"Player Rating" int
+    ,"Score" varchar(10)
+);'''
+
+        insert_query = f'''TRUNCATE TABLE "{self.table_name}";
+
+INSERT INTO "{self.table_name}"
+VALUES'''
+
+        for i,(place,player,pdga_number,player_rating,score) in self.results_df.iterrows():
+            if i:
+                comma = ','
+                
+            else:
+                comma = ' '
+
+            if "'" in player:
+                player = player.replace("'", "''")
+                
+            insert_value = f"{comma}({place},'{player}',{pdga_number},{player_rating},'{score}')"
+            
+            insert_query += "\n\t" + insert_value
+    
+        insert_query += "\n;"
+
+        return table_exists_query, create_table_query, insert_query
+
+#     def pickle_that_shit(self, file_path=''):
+
+#         if file_path[-4:] != '.pkl':
+#             if '.' in file_path:
+#                 file_path = file_path.split('.')[0]
+
+#             file_path = file_path + '.pkl'
+
+#         with open(file_path, 'wb') as outp:
+#     company1 = Company('banana', 40)
+#     pickle.dump(company1, outp, pickle.HIGHEST_PROTOCOL)
+
+#     company2 = Company('spam', 42)
+#     pickle.dump(company2, outp, pickle.HIGHEST_PROTOCOL)
+
+# class Company(object):
+#     def __init__(self, name, value):
+#         self.name = name
+#         self.value = value
+
+
+
+# del company1
+# del company2
+
+# with open('company_data.pkl', 'rb') as inp:
+#     company1 = pickle.load(inp)
+#     print(company1.name)  # -> banana
+#     print(company1.value)  # -> 40
+
+#     company2 = pickle.load(inp)
+#     print(company2.name) # -> spam
+#     print(company2.value)  # -> 42
 
 
 class Player(PlayerSearch):
@@ -362,7 +527,7 @@ class Player(PlayerSearch):
         player = self.official_name
         results = event.results_df
         year = event.year
-        event_name = event.official_name
+        event_name = event.table_name
 
         max_score = max([x for x in results.Place.values if str(x).isnumeric()])
 
@@ -451,51 +616,127 @@ Weighted average: {round(self.total_score / (self.number_of_events * 0.5), 3):.3
 
         return None
 
-# class SomeClass(object):
-#     def __init__(self, n):
-#         self.list = range(0, n)
 
-#     @property
-#     def list(self):
-#         return self._list
-#     @list.setter
-#     def list(self, val):
-#         self._list = val
-#         self._listsquare = [x**2 for x in self._list ]
+class League:
+    def __init__(
+        self, 
+        name=None, 
+        teams=[], 
+        players=[], 
+        team_total_limit=9, 
+        team_active_limit=5, 
+        year=dt.today().year,
+        player_table_name='Players'
+    ):
 
-#     @property
-#     def listsquare(self):
-#         return self._listsquare
-#     @listsquare.setter
-#     def listsquare(self, val):
-#         self.list = [int(pow(x, 0.5)) for x in val]
+        self.name = name.strip()
+        self.teams = teams
+        self.players = players
+        self.team_names = [team.name for team in self.teams]
+        self.team_owners = [team.owner for team in self.teams]
+        self.team_rosters = [team.roster for team in self.teams]
+        self._team_total_limit = team_total_limit
+        self._team_active_limit = team_active_limit
+        self.player_table_name = player_table_name
+        self.player_data = self.create_player_data()
 
-# >>> c = SomeClass(5)
-# >>> c.listsquare
-# [0, 1, 4, 9, 16]
-# >>> c.list
-# [0, 1, 2, 3, 4]
-# >>> c.list = range(0,6)
-# >>> c.list
-# [0, 1, 2, 3, 4, 5]
-# >>> c.listsquare
-# [0, 1, 4, 9, 16, 25]
-# >>> c.listsquare = [x**2 for x in range(0,10)]
-# >>> c.list
-# [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        _exists, _create, _insert = self.sql_queries()
+        self.table_exists_query = _exists
+        self.create_table_query = _create
+        self.insert_values_query = _insert
+
+
+    def __repr__(self):
+        return self.name
+
+
+    def create_player_data(self):
+        players_for_postgres = []
+
+        for player in self.players:
+            for year, results in player.player_results.items():
+                for event_name, place in results.items():
+                    _dict = {
+                        'Name': player.official_name,
+                        'PDGA Number': player.pdga_number,
+                        'Event Name': event_name,
+                        'Place': place,
+                        'Event Year': year,
+                        'Event Status': 'Complete'
+                    }
+                    
+                    players_for_postgres.append(_dict)
+
+        return players_for_postgres
+
+
+    def sql_queries(self):
+
+
+    def table_exists(self, table_name):
+
+        table_exists_query = f"""SELECT 1
+FROM information_schema.tables
+WHERE table_name='{table_name}'"""
+
+        return table_exists_query
+
+
+    def create_table(self, table_name, ):
+
+        table_exists_query = f"""SELECT 1
+FROM information_schema.tables
+WHERE table_name='{table_name}'"""
+
+        return table_exists_query
+
+        create_table_query = f'''CREATE TABLE "{self.player_table_name}" (
+     "Name" varchar(200)
+    ,"PDGA Number" bigint
+    ,"Event Name" varchar(500)
+    ,"Place" int
+    ,"Event Year" int
+    ,"Event Status" varchar(50)
+);'''
+
+        insert_query = f'''TRUNCATE TABLE "{self.player_table_name}";
+
+INSERT INTO "{self.player_table_name}"
+VALUES'''
+
+        for i,_dict in enumerate(self.player_data):
+            if i:
+                comma = ','
+                
+            else:
+                comma = ' '
+
+            player = _dict['Name'].replace("'", "''")
+            pdga_number = _dict['PDGA Number']
+            event_name = _dict['Event Name'].replace("'", "''")
+            place = _dict['Place']
+            event_year = _dict['Event Year']
+            event_status = _dict['Event Status']
+                
+            insert_value = f"{comma}('{player}',{pdga_number},'{event_name}',{place},{event_year},'{event_status}')"
+            
+            insert_query += "\n\t" + insert_value
+    
+        insert_query += "\n;"
+
+        return table_exists_query, create_table_query, insert_query
+
+
     
 class Team:
     
-    def __init__(self, owner, name, available_players, roster=[], total_limit=8, active_limit=5, year=dt.today().year):
+    def __init__(self, owner, name, available_players, roster=[]):
 
         self.owner = owner.strip().title()
         self.name = name.strip().title()
-        self._limit = total_limit
-        self._active_limit = active_limit
         self.roster = roster
         self.player_count = len(self.roster)
-        # self.active_player_count = self.count_active_players()
-        # self.active_spots_remaining = self._active_limit - self.number_of_active_players
+        self.league = None
 
     def __repr__(self):
         return f'{self.name}, owned by {self.owner}'
@@ -640,19 +881,29 @@ Weighted average: {round(_total_score / (_number_of_events * 0.5), 3):.3f}
         return None
 
 
-class League:
-    def __init__(self, name, teams, available_players, unavailable_players=[], team_total_limit=8, team_active_limit=5, year=dt.today().year):
+import psycopg2
 
-        self.name = name.strip()
-        self.teams = teams
-        self.team_names = [team.name for team in self.teams]
-        self.team_owners = [team.owner for team in self.teams]
-        self.team_rosters = [team.roster for team in self.teams]
-        self._team_total_limit = total_limit
-        self._team_active_limit = active_limit
+def connect_to_sql():
 
-    def __repr__(self):
-        return self.name
+    connection = psycopg2.connect(
+        host='localhost', 
+        database='dg_fantasy', 
+        port=5433, 
+        user='postgres', 
+        password='GE$malone'
+    )
+
+    executor = connection.cursor()
+
+    return connection, executor
 
 
+def close_connection(connection, executor):
 
+    executor.close()
+
+    connection.commit()
+
+    connection.close()
+
+    return None
