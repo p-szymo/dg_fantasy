@@ -79,12 +79,23 @@ def create_table(table_name, table_columns):
 def player_table_dict():
 
     return {
-        "Name": "varchar(200)",
-        "PDGA Number": "bigint",
-        "Event Name": "varchar(500)",
-        "Place": "int",
-        "Event Year": "int",
-        "Event Status": "varchar(50)"
+        'Name': 'varchar(200)',
+        'PDGA Number': 'bigint',
+        'Event Name': 'varchar(500)',
+        'Place': 'int',
+        'Event Year': 'int',
+        'Event Status': 'varchar(50)'
+    }
+
+
+def event_table_dict():
+
+    return {
+        'Place': 'int',
+        'Player': 'varchar(200)',
+        'PDGA Number': 'bigint',
+        'Player Rating': 'int',
+        'Score': 'varchar(10)'
     }
 
 
@@ -114,7 +125,7 @@ INSERT INTO "{table_name}" ({",".join(column_names)})
 VALUES {insert_values}'''
 
     return insert_query
-    
+
 
 class Search:
 
@@ -312,11 +323,15 @@ class Event(EventSearch):
 
         _exists, _create, _insert = self.sql_queries()
 
-        self.table_exists_query = _exists
+        self.table_exists_query = table_exists(self.table_name)
 
-        self.create_table_query = _create
+        self.create_table_query = create_table(self.table_name, event_table_dict())
 
-        self.insert_values_query = _insert
+        self.insert_values_query = insert_data(
+            self.table_name, 
+            event_table_dict(), 
+            self.results_df.to_dict('records')
+        )
 
 
 
