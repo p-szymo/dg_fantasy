@@ -66,7 +66,7 @@ WHERE table_name='{table_name}'"""
 
 def create_table(table_name, table_columns):
 
-    columns_list = [f"{column} {datatype}" for column,datatype in table_columns.items()]
+    columns_list = [f'"{column}" {datatype}' for column,datatype in table_columns.items()]
     columns_query = ',\n\t'.join(columns_list)
 
     create_table_query = f'''CREATE TABLE "{table_name}" (
@@ -109,11 +109,11 @@ def insert_data(table_name, table_columns, data):
 
         data_to_insert = []
 
-        for i,(column_name,datum) in _dict.items():
+        for column_name,datum in _dict.items():
             if "varchar" in table_columns[column_name]:
                 datum = "'" + datum.replace("'", "''") + "'"
 
-            data_to_insert.append(datum)
+            data_to_insert.append(str(datum))
 
         insert_list.append('(' + ','.join(data_to_insert) + ')')
 
@@ -321,7 +321,7 @@ class Event(EventSearch):
 
         self.results_df = self.event_parser(self.url)
 
-        _exists, _create, _insert = self.sql_queries()
+        # _exists, _create, _insert = self.sql_queries()
 
         self.table_exists_query = table_exists(self.table_name)
 
@@ -655,10 +655,16 @@ class League:
         self.player_table_name = player_table_name
         self.player_data = self.create_player_data()
 
-        _exists, _create, _insert = self.sql_queries()
-        self.table_exists_query = _exists
-        self.create_table_query = _create
-        self.insert_values_query = _insert
+        self.table_exists_query = table_exists(self.player_table_name)
+
+        self.create_table_query = create_table(self.player_table_name, event_table_dict())
+
+        self.insert_values_query = insert_data(
+            self.player_table_name, 
+            player_table_dict(), 
+            self.player_data
+        )
+
 
 
     def __repr__(self):
@@ -683,9 +689,6 @@ class League:
                     players_for_postgres.append(_dict)
 
         return players_for_postgres
-
-
-    def sql_queries(self):
 
 
     def table_exists(self, table_name):
