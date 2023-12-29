@@ -76,6 +76,41 @@ def create_table(table_name, table_columns):
     return create_table_query
 
 
+def insert_data(table_name, table_columns, data, truncate=True):
+
+    column_names = table_columns.keys()
+
+    insert_list = []
+
+    for i,_dict in enumerate(data):
+
+        data_to_insert = []
+
+        for column_name,datum in _dict.items():
+            if "varchar" in table_columns[column_name]:
+                datum = "'" + datum.replace("'", "''") + "'"
+
+            data_to_insert.append(str(datum))
+
+        insert_list.append('(' + ','.join(data_to_insert) + ')')
+
+    insert_values = '\n\t,'.join(insert_list) + '\n;'
+
+    if truncate:
+
+        insert_query = f'''TRUNCATE TABLE "{table_name}";
+
+'''
+
+    else:
+        insert_query = ''
+
+    insert_query += f'''INSERT INTO "{table_name}" ({",".join(column_names)})
+VALUES {insert_values}'''
+
+    return insert_query
+
+
 def player_table_dict():
 
     return {
@@ -99,32 +134,20 @@ def event_table_dict():
     }
 
 
-def insert_data(table_name, table_columns, data):
+def league_table_dict():
 
-    column_names = table_columns.keys()
-
-    insert_list = []
-
-    for i,_dict in enumerate(data):
-
-        data_to_insert = []
-
-        for column_name,datum in _dict.items():
-            if "varchar" in table_columns[column_name]:
-                datum = "'" + datum.replace("'", "''") + "'"
-
-            data_to_insert.append(str(datum))
-
-        insert_list.append('(' + ','.join(data_to_insert) + ')')
-
-    insert_values = '\n\t,'.join(insert_list) + '\n;'
-
-    insert_query = f'''TRUNCATE TABLE "{table_name}";
-
-INSERT INTO "{table_name}" ({",".join(column_names)})
-VALUES {insert_values}'''
-
-    return insert_query
+    return {
+        'Team Name': 'varchar(100)',
+        'Team Owner': 'varchar(100)',
+        'Number of Players': 'int',
+        'Number of Active Players': 'int',
+        'Wins': 'int',
+        'Losses': 'int',
+        'Ties': 'int',
+        'First Place': 'int',
+        'Second Place': 'int',
+        'Third Place': 'int',
+    }
 
 
 class Search:
@@ -405,44 +428,6 @@ class Event(EventSearch):
             
         return f"{event_name}, {self.year}"
 
-
-    def sql_queries(self):
-
-        table_exists_query = f"""SELECT 1
-FROM information_schema.tables
-WHERE table_name='{self.table_name}'"""
-
-        create_table_query = f'''CREATE TABLE "{self.table_name}" (
-     "Place" int
-    ,"Player" varchar(100)
-    ,"PDGA Number" bigint
-    ,"Player Rating" int
-    ,"Score" varchar(10)
-);'''
-
-        insert_query = f'''TRUNCATE TABLE "{self.table_name}";
-
-INSERT INTO "{self.table_name}"
-VALUES'''
-
-        for i,(place,player,pdga_number,player_rating,score) in self.results_df.iterrows():
-            if i:
-                comma = ','
-                
-            else:
-                comma = ' '
-
-            if "'" in player:
-                player = player.replace("'", "''")
-                
-            insert_value = f"{comma}({place},'{player}',{pdga_number},{player_rating},'{score}')"
-            
-            insert_query += "\n\t" + insert_value
-    
-        insert_query += "\n;"
-
-        return table_exists_query, create_table_query, insert_query
-
 #     def pickle_that_shit(self, file_path=''):
 
 #         if file_path[-4:] != '.pkl':
@@ -641,7 +626,8 @@ class League:
         team_total_limit=9, 
         team_active_limit=5, 
         year=dt.today().year,
-        player_table_name='Players'
+        player_table_name='Players',
+        league_table_name='League'
     ):
 
         self.name = name.strip()
@@ -653,18 +639,24 @@ class League:
         self._team_total_limit = team_total_limit
         self._team_active_limit = team_active_limit
         self.player_table_name = player_table_name
+        self.league_table_name = league_table_name
         self.player_data = self.create_player_data()
 
-        self.table_exists_query = table_exists(self.player_table_name)
+        self.player_table_exists_query = table_exists(self.player_table_name)
 
-        self.create_table_query = create_table(self.player_table_name, event_table_dict())
+        self.player_create_table_query = create_table(self.player_table_name, player_table_dict())
 
-        self.insert_values_query = insert_data(
+        self.player_insert_values_query = insert_data(
             self.player_table_name, 
             player_table_dict(), 
             self.player_data
         )
 
+        self.league_table_exists_query = table_exists(self.league_table_name)
+
+        self.league_create_table_query = create_table(self.league_table_name, league_table_dict())
+
+        self.build_league_table()
 
 
     def __repr__(self):
@@ -691,70 +683,69 @@ class League:
         return players_for_postgres
 
 
-    def table_exists(self, table_name):
+    def build_player_table(self):
 
-        table_exists_query = f"""SELECT 1
-FROM information_schema.tables
-WHERE table_name='{table_name}'"""
+        connection, postgres = connect_to_sql()
 
-        return table_exists_query
-
-
-    def create_table(self, table_name, ):
-
-        table_exists_query = f"""SELECT 1
-FROM information_schema.tables
-WHERE table_name='{table_name}'"""
-
-        return table_exists_query
-
-        create_table_query = f'''CREATE TABLE "{self.player_table_name}" (
-     "Name" varchar(200)
-    ,"PDGA Number" bigint
-    ,"Event Name" varchar(500)
-    ,"Place" int
-    ,"Event Year" int
-    ,"Event Status" varchar(50)
-);'''
-
-        insert_query = f'''TRUNCATE TABLE "{self.player_table_name}";
-
-INSERT INTO "{self.player_table_name}"
-VALUES'''
-
-        for i,_dict in enumerate(self.player_data):
-            if i:
-                comma = ','
-                
-            else:
-                comma = ' '
-
-            player = _dict['Name'].replace("'", "''")
-            pdga_number = _dict['PDGA Number']
-            event_name = _dict['Event Name'].replace("'", "''")
-            place = _dict['Place']
-            event_year = _dict['Event Year']
-            event_status = _dict['Event Status']
-                
-            insert_value = f"{comma}('{player}',{pdga_number},'{event_name}',{place},{event_year},'{event_status}')"
+        postgres.execute(self.player_table_exists_query)
             
-            insert_query += "\n\t" + insert_value
-    
-        insert_query += "\n;"
+        if not postgres.fetchone():
+            print(f'Table named "{self.player_table_name}" does not exist.')
+            postgres.execute(self.player_create_table_query)
+                
+        else:
+            print(f'Table named "{self.player_table_name}" already exists.')
+            pass
+            
+        postgres.execute(self.player_insert_values_query)
+            
+        print(f'Values inserted into "{self.player_table_name}" table.')
+            
+        close_connection(connection, postgres)
 
-        return table_exists_query, create_table_query, insert_query
+        return None
+
+
+    def build_league_table(self):
+
+        connection, postgres = connect_to_sql()
+
+        postgres.execute(self.league_table_exists_query)
+            
+        if not postgres.fetchone():
+            postgres.execute(self.league_create_table_query)
+            print(f'Table named "{self.league_table_name}" has been created.')
+                
+        else:
+            print(f'Table named "{self.league_table_name}" already exists.')
+            pass
+            
+        close_connection(connection, postgres)
+
+        return None
 
 
     
 class Team:
     
-    def __init__(self, owner, name, available_players, roster=[]):
+    def __init__(
+        self, 
+        owner, 
+        name, 
+        available_players, 
+        roster=[],
+        league_table_name='League'
+
+    ):
 
         self.owner = owner.strip().title()
         self.name = name.strip().title()
         self.roster = roster
         self.player_count = len(self.roster)
-        self.league = None
+        self.league = None,
+        self.league_table_name = league_table_name
+
+        self.insert_initial_data()
 
     def __repr__(self):
         return f'{self.name}, owned by {self.owner}'
@@ -897,6 +888,44 @@ Weighted average: {round(_total_score / (_number_of_events * 0.5), 3):.3f}
         print(_message)
 
         return None
+
+
+    def insert_initial_data(self):
+
+        data = {
+            'Team Name': self.name,
+            'Team Owner': self.owner,
+            'Number of Players': 0,
+            'Number of Active Players': 0,
+            'Wins': 0,
+            'Losses': 0,
+            'Ties': 0,
+            'First Place': 0,
+            'Second Place': 0,
+            'Third Place': 0,
+        }
+
+        query = insert_data(self.league_table_name, league_table_dict(), data, truncate=False)
+
+        postgres.execute(f'''SELECT 1
+FROM {self.league_table_name}
+WHERE "Team Name"=''{self.name}''
+''')
+            
+        if not postgres.fetchone():
+            postgres.execute(query)
+            print(f'"{self.name} inserted into "{self.league_table_name}".')
+                
+        else:
+            print(f'"{self.name} already exists in "{self.league_table_name}".')
+            pass
+            
+        close_connection(connection, postgres)
+
+        return None
+
+
+
 
 
 import psycopg2
